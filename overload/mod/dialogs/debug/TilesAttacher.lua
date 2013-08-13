@@ -30,6 +30,7 @@ local GetQuantity = require "engine.dialogs.GetQuantity"
 module(..., package.seeall, class.inherit(engine.ui.Dialog))
 
 function _M:init()
+	game.tiles_attachements = game.tiles_attachements or {}
 	self:generateList()
 	engine.ui.Dialog.init(self, "Tiles Attacher", game.w, game.h)
 
@@ -111,8 +112,11 @@ function _M:unload()
 		end
 	end
 	print(table.concat(t))
-	print("=>>", "game/modules/tome/"..Tiles.prefix.."/attachements.lua")
-	local f = io.open("game/modules/tome/"..Tiles.prefix.."/attachements.lua", "w")
+	local path = fs.getRealPath(Tiles.prefix).."/attachements.lua"
+	if Tiles.prefix == "/data/gfx/shockbolt/" then path = "game/modules/tome/data/gfx/shockbolt/attachements.lua" end
+	print("=>>", path)
+	local f, err = io.open(path, "w")
+	print(f, err)
 	f:write(table.concat(t))
 	f:close()
 end
