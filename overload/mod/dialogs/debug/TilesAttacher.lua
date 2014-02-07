@@ -41,6 +41,7 @@ function _M:init()
 	self.t5 = Textzone.new{auto_width=1, auto_height=1, text="Belly"}
 	self.t6 = Textzone.new{auto_width=1, auto_height=1, text="Feet"}
 
+	self.out = Textzone.new{width=800, auto_height=1, text=""}
 	self.mcoords = Textzone.new{width=100, auto_height=1, text=""}
 	self.clist = List.new{scrollbar=true, width=400, height=self.ih - 5, list=self.list, fct=function(item) self:use(item) end}--, select=function(item) self:use(item) end}
 	self.coords = ListColumns.new{width=300, height=self.ih - 5, list={}, fct=function(item) self:useCoords(item) end, select=function(item) self:useCoords(item) end, columns={
@@ -58,6 +59,7 @@ function _M:init()
 		{left=420, top=0, ui=self.mcoords},
 		{right=0, top=10 + self.reset.h, ui=self.coords},
 		{right=0, top=10, ui=self.reset},
+		{right=0, bottom=20, ui=self.out},
 	}
 	self:setupUI(false, false)
 
@@ -91,17 +93,28 @@ end
 function _M:unload()
 	game:defaultMouseCursor()
 
-	local t = { 'tiles={} dolls={}\n\n' }
+	local sets = {}
 	for id, data in pairs(game.tiles_attachements) do
 		local ok = false
 		for kind, d in pairs(data) do if kind ~= "base" and d.x then ok = true break end end
 		if ok then
 			local base = data.base or 64
 			local _, _, dollrace, sex = id:find("dolls_(.*)_(.*)")
+			local t
 			if dollrace then
+				local tileset, addon = self:getInfos(self.list[id])
+				sets[tileset] = sets[tileset] or {}
+				sets[tileset][addon] = sets[tileset][addon] or {}
+				t = sets[tileset][addon]
+
 				t[#t+1] = ('dolls.%s = dolls.%s or {}\n'):format(dollrace, dollrace)
 				t[#t+1] = ('dolls.%s.%s = { base=%d,\n'):format(dollrace, sex, base)
 			else
+				local tileset, addon = self:getInfos(id)
+				sets[tileset] = sets[tileset] or {}
+				sets[tileset][addon] = sets[tileset][addon] or {}
+				t = sets[tileset][addon]
+
 				t[#t+1] = ('tiles[%q] = { base=%d,\n'):format(id, base)
 			end
 
@@ -111,14 +124,24 @@ function _M:unload()
 			t[#t+1] = '}\n'
 		end
 	end
-	print(table.concat(t))
-	local path = fs.getRealPath(Tiles.prefix).."/attachements.lua"
-	if Tiles.prefix == "/data/gfx/shockbolt/" then path = "game/modules/tome/data/gfx/shockbolt/attachements.lua" end
-	print("=>>", path)
-	local f, err = io.open(path, "w")
-	print(f, err)
-	f:write(table.concat(t))
-	f:close()
+
+	for tileset, d in pairs(sets) do
+		for addon, t in pairs(d) do
+			print("****************** ", tileset, addon)
+			print(table.concat(t))
+			local path
+			if addon == "main" then path = "game/modules/tome/data/gfx/"..tileset.."/attachements.lua"
+			elseif fs.exists("/addons/tome-"..addon) then path = "game/addons/tome-"..addon.."/overload/data/gfx/"..tileset.."/attachements-"..addon..".lua"
+			elseif fs.exists("/dlcs/tome-"..addon) then path = "game/dlcs/tome-"..addon.."/overload/data/gfx/"..tileset.."/attachements-"..addon..".lua"
+			end
+			print("=>>", path)
+			local f, err = io.open(path, "w")
+			print(f, err)
+			if addon == "main" then f:write('tiles={} dolls={}\n\n') end
+			f:write(table.concat(t))
+			f:close()
+		end
+	end
 end
 
 function _M:setSpot(kind)
@@ -181,6 +204,20 @@ function _M:useCoords(item)
 	if not item or not self.uis or not self.uis[4] then return end
 end
 
+function _M:getInfos(name)
+	local tileset = "shockbolt"
+	local _, _, tilesetc = Tiles.prefix:find("/data/gfx/([^/]+)/")
+	if tilesetc then tileset = tilesetc end
+	local addon = "main"
+	local path = fs.getRealPath(Tiles.prefix..name)
+	local _, _, pathc = path:find("dlcs/tome%-([^/]+)/")
+	if pathc then addon = pathc end
+	local _, _, pathc = path:find("addons/tome%-([^/]+)/")
+	if pathc then addon = pathc end
+
+	return tileset, addon, name
+end
+
 function _M:use(item)
 	if not item or not self.uis or not self.uis[2] then return end
 	if self.cur_item == item then return end
@@ -189,6 +226,11 @@ function _M:use(item)
 	self.uis[2].ui = self.img
 	self.coords:setList(self:loadSpots(item.kind), true)
 	self.cur_item = item
+
+	local tileset, addon, name = self:getInfos(item.name)
+
+	self.out.text = tileset..":"..addon.."@"..name
+	self.out:generate()
 end
 
 function _M:generateList()
@@ -201,20 +243,34 @@ function _M:generateList()
 		if file:find(".png$") then list[#list+1] = {kind="player/"..file, name="player/"..file} end
 	end
 	list[#list+1] = {kind="dolls_race_dwarf_female", name="player/dwarf_female/base_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_dwarf_male", name="player/dwarf_male/base_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_elf_female", name="player/elf_female/base_redhead_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_elf_male", name="player/elf_male/base_redhead_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_ghoul_all", name="player/ghoul/base_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_halfling_female", name="player/halfling_female/base_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_halfling_male", name="player/halfling_male/base_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_human_female", name="player/human_female/base_cornac_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_human_male", name="player/human_male/base_cornac_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_orc_all", name="player/orc/base_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_runic_golem_all", name="player/runic_golem/base_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_skeleton_all", name="player/skeleton/base_01.png"}
+	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_yeek_all", name="player/yeek/base_01.png"}
+	list[list[#list].kind] = list[#list].name
+	self:triggerHook{"TilesAttacher:list", list=list}
 
-	for i, data in pairs(list) do self:updateColorList(data) end
+	for i, data in ipairs(list) do self:updateColorList(data) end
 
 	table.sort(list, function(a,b) return a.kind < b.kind end)
 
