@@ -30,34 +30,18 @@ local GetQuantity = require "engine.dialogs.GetQuantity"
 module(..., package.seeall, class.inherit(engine.ui.Dialog))
 
 function _M:init()
-	game.tiles_attachements = game.tiles_attachements or {}
+	game.tiles_facing = game.tiles_facing or {}
 	self:generateList()
-	engine.ui.Dialog.init(self, "Tiles Attacher", game.w, game.h)
-
-	self.t1 = Textzone.new{auto_width=1, auto_height=1, text="Head"}
-	self.t2 = Textzone.new{auto_width=1, auto_height=1, text="Hand1"}
-	self.t3 = Textzone.new{auto_width=1, auto_height=1, text="Hand2"}
-	self.t4 = Textzone.new{auto_width=1, auto_height=1, text="Back"}
-	self.t5 = Textzone.new{auto_width=1, auto_height=1, text="Belly"}
-	self.t6 = Textzone.new{auto_width=1, auto_height=1, text="Feet"}
+	engine.ui.Dialog.init(self, "Tiles Facing", game.w, game.h)
 
 	self.out = Textzone.new{width=800, auto_height=1, text=""}
-	self.mcoords = Textzone.new{width=100, auto_height=1, text=""}
 	self.clist = List.new{scrollbar=true, width=400, height=self.ih - 5, list=self.list, fct=function(item) self:use(item) end}--, select=function(item) self:use(item) end}
-	self.coords = ListColumns.new{width=300, height=self.ih - 5, list={}, fct=function(item) self:useCoords(item) end, select=function(item) self:useCoords(item) end, columns={
-		{name="", width=10, display_prop="key"},
-		{name="Spot", width=30, display_prop="name"},
-		{name="X", width=30, display_prop=function(item) return item.x and tostring(item.x*self.img.iw) or "--" end},
-		{name="Y", width=30, display_prop=function(item) return item.y and tostring(item.y*self.img.iw) or "--" end},
-	}}
 	self.img = Image.new{auto_width=true, auto_height=true, zoom=4, file="invis.png"}
 	self.reset = Button.new{text="Reset", fct=function() self:resetSpots() end}
 
 	self:loadUI{
 		{left=0, top=0, ui=self.clist},
-		{left=420, top=self.mcoords.h, ui=self.img},
-		{left=420, top=0, ui=self.mcoords},
-		{right=0, top=10 + self.reset.h, ui=self.coords},
+		{left=420, top=0, ui=self.img},
 		{right=0, top=10, ui=self.reset},
 		{right=0, bottom=20, ui=self.out},
 	}
@@ -66,39 +50,18 @@ function _M:init()
 	game:setMouseCursor("/data/gfx/shockbolt/invis.png", nil, 16, 16)
 
 	self.key:addBinds{
-		HOTKEY_1 = function() self:setSpot("head") end,
-		HOTKEY_2 = function() self:setSpot("hand1") end,
-		HOTKEY_3 = function() self:setSpot("hand2") end,
-		HOTKEY_4 = function() self:setSpot("back") end,
-		HOTKEY_5 = function() self:setSpot("belly") end,
-		HOTKEY_6 = function() self:setSpot("feet") end,
+		MOVE_RIGHT = function() self:setSpot("right") end,
+		MOVE_LEFT = function() self:setSpot("left") end,
 		EXIT = function() game:unregisterDialog(self) end,
 	}	
-
-	self.mouse:registerZone(420, self.mcoords.h, 150 * 4, 150 * 4, function(button, x, y, xrel, yrel, bx, by, event)
-		local x, y = core.mouse.get()
-		x, y = x - self.uis[2].x - self.display_x, y - self.uis[2].y - self.display_y
-		x, y = math.floor(x / 4), math.floor(y / 4)
-		self.mcoords.text = x.."x"..y
-		self.mcoords:generate()
-
-		if event == "button" and button == "left" then
-			for _, d in ipairs(self.coords.list) do	if not d.x then self:setSpot(d.kind) break end end
-		elseif event == "button" then
-			for i = #self.coords.list,1,-1 do local d=self.coords.list[i] if d.x then self:resetSpots(d.kind) break end end
-		end
-	end)
 end
 
 function _M:unload()
 	game:defaultMouseCursor()
 
 	local sets = {}
-	for id, data in pairs(game.tiles_attachements) do
-		local ok = false
-		for kind, d in pairs(data) do if kind ~= "base" and d.x then ok = true break end end
-		if ok then
-			local base = data.base or 64
+	for id, kind in pairs(game.tiles_facing) do
+		if kind.flipx ~= nil then
 			local _, _, dollrace, sex = id:find("dolls_(.*)_(.*)")
 			local t
 			if dollrace then
@@ -108,20 +71,15 @@ function _M:unload()
 				t = sets[tileset][addon]
 
 				t[#t+1] = ('dolls.%s = dolls.%s or {}\n'):format(dollrace, dollrace)
-				t[#t+1] = ('dolls.%s.%s = { base=%d,\n'):format(dollrace, sex, base)
+				t[#t+1] = ('dolls.%s.%s = { flipx=%s }\n'):format(dollrace, sex, tostring(kind.flipx))
 			else
 				local tileset, addon = self:getInfos(id)
 				sets[tileset] = sets[tileset] or {}
 				sets[tileset][addon] = sets[tileset][addon] or {}
 				t = sets[tileset][addon]
 
-				t[#t+1] = ('tiles[%q] = { base=%d,\n'):format(id, base)
+				t[#t+1] = ('tiles[%q] = { flipx=%s }\n'):format(id, tostring(kind.flipx))
 			end
-
-			for kind, d in pairs(data) do if kind ~= "base" and d.x then
-				t[#t+1] = ('\t%s = {x=%d, y=%d},\n'):format(kind, d.x * base, d.y * base)
-			end end
-			t[#t+1] = '}\n'
 		end
 	end
 
@@ -130,9 +88,9 @@ function _M:unload()
 			print("****************** ", tileset, addon)
 			print(table.concat(t))
 			local path
-			if addon == "main" then path = "game/modules/tome/data/gfx/"..tileset.."/attachements.lua"
-			elseif fs.exists("/addons/tome-"..addon) then path = "game/addons/tome-"..addon.."/overload/data/gfx/"..tileset.."/attachements-"..addon..".lua"
-			elseif fs.exists("/dlcs/tome-"..addon) then path = "game/dlcs/tome-"..addon.."/overload/data/gfx/"..tileset.."/attachements-"..addon..".lua"
+			if addon == "main" then path = "game/modules/tome/data/gfx/"..tileset.."/facings.lua"
+			elseif fs.exists("/addons/tome-"..addon) then path = "game/addons/tome-"..addon.."/overload/data/gfx/"..tileset.."/facings-"..addon..".lua"
+			elseif fs.exists("/dlcs/tome-"..addon) then path = "game/dlcs/tome-"..addon.."/overload/data/gfx/"..tileset.."/facings-"..addon..".lua"
 			end
 			print("=>>", path)
 			local f, err = io.open(path, "w")
@@ -147,61 +105,28 @@ end
 function _M:setSpot(kind)
 	if not self.cur_item then return end
 	local as = self.cur_item.kind
-	game.tiles_attachements[as] = game.tiles_attachements[as] or {}
-	game.tiles_attachements[as][kind] = game.tiles_attachements[as][kind] or {}
+	game.tiles_facing[as] = game.tiles_facing[as] or {}
 
-	local x, y = core.mouse.get()
-	x, y = x - self.uis[2].x - self.display_x, y - self.uis[2].y - self.display_y
-	x, y = math.floor(x / 4), math.floor(y / 4)
-
-	if self.img.iw < self.img.ih then y = y - self.img.iw end
-
-	game.tiles_attachements[as][kind].x, game.tiles_attachements[as][kind].y = x / self.img.iw, y / self.img.iw
-	game.tiles_attachements[as].base = self.img.iw
-	self.coords:setList(self:loadSpots(as), true)
+	game.tiles_facing[as].flipx = kind == "right"
 	self:updateColorList(self.cur_item)
+	self.clist:select(self.clist.sel+1)
+	self.clist:onUse()
 end
 
-function _M:resetSpots(kind)
+function _M:resetSpots()
 	if not self.cur_item then return end
 	local as = self.cur_item.kind
-	if not kind then
-		game.tiles_attachements[as] = nil
-	else
-		game.tiles_attachements[as] = game.tiles_attachements[as] or {}
-		game.tiles_attachements[as][kind] = {}
-	end
-	self.coords:setList(self:loadSpots(as), true)
+	game.tiles_facing[as] = nil
 	self:updateColorList(self.cur_item)
 end
 
 function _M:hasSpots(as)
-	if not game.tiles_attachements[as] then return 0 end
-	local list = game.tiles_attachements[as]
-	local nb = 0
-	for kind, d in pairs(list) do if kind ~= "base" and d.x then nb = nb + 1 end end
-	if nb == 6 then return 2
-	elseif nb == 0 then return 0
-	else return 1 end
-end
-
-function _M:loadSpots(as)
-	local list = game.tiles_attachements[as] or {}
-	local get = function(k, x) if list[k] then return list[k][x] or nil else return nil end end
-	local spots = {
-		{key="1", name="Head", kind="head", x=get("head", "x"), y=get("head", "y")},
-		{key="2", name="Hand1", kind="hand1", x=get("hand1", "x"), y=get("hand1", "y")},
-		{key="3", name="Hand2", kind="hand2", x=get("hand2", "x"), y=get("hand2", "y")},
-		{key="4", name="Back", kind="back", x=get("back", "x"), y=get("back", "y")},
-		{key="5", name="Belly", kind="belly", x=get("belly", "x"), y=get("belly", "y")},
-		{key="6", name="Feet", kind="feet", x=get("feet", "x"), y=get("feet", "y")},
-	}
-
-	return spots
-end
-
-function _M:useCoords(item)
-	if not item or not self.uis or not self.uis[4] then return end
+	if not game.tiles_facing[as] then return 0 end
+	local kind = game.tiles_facing[as]
+	if not kind then return 0 end
+	if kind.flipx == true then return 1
+	elseif kind.flipx == false then return 2
+	else return 0 end
 end
 
 function _M:getInfos(name)
@@ -224,7 +149,6 @@ function _M:use(item)
 	local old = self.img
 	self.img = Image.new{auto_width=true, auto_height=true, zoom=4, file=item.name, back_color={0, 200, 120, 120}}
 	self.uis[2].ui = self.img
-	self.coords:setList(self:loadSpots(item.kind), true)
 	self.cur_item = item
 
 	local tileset, addon, name = self:getInfos(item.name)
@@ -282,25 +206,4 @@ function _M:updateColorList(item)
 	local color = cols[self:hasSpots(item.kind)]
 	item.color = color
 	if self.clist then self.clist:drawItem(item) end
-end
-
-function _M:innerDisplay(bx, by, nb_keyframes)
-	if not self.uis[2] then return end
-	local x, y = core.mouse.get()
-	x, y = x - self.uis[2].x - self.display_x, y - self.uis[2].y - self.display_y
-	x, y = math.floor(x / 4) * 4, math.floor(y / 4) * 4
-
-	core.display.drawQuad(bx + self.uis[2].x + x, by + self.uis[2].y + y, 4, 4, 255, 120, 0, 255)
-
-	for kind, d in pairs(self.coords.list) do if d.x and d.y then
-		local x, y = d.x * self.img.iw * 4, d.y * self.img.iw * 4
-		x, y = bx + self.uis[2].x + x, by + self.uis[2].y + y
-
-		if self.img.iw < self.img.ih then y = y + self.img.iw * 4 end
-
-		core.display.drawQuad(x, y, 4, 4, 255, 0, 255, 255)
-		y = y + 6
-
-		self["t"..d.key]:display(x, y, nb_keyframes)
-	end end
 end
