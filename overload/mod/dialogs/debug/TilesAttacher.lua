@@ -75,7 +75,7 @@ function _M:init()
 		EXIT = function() game:unregisterDialog(self) end,
 	}	
 
-	self.mouse:registerZone(420, self.mcoords.h, 150 * 4, 150 * 4, function(button, x, y, xrel, yrel, bx, by, event)
+	self.mouse:registerZone(420, self.mcoords.h, 150 * 4, 150 * 8, function(button, x, y, xrel, yrel, bx, by, event)
 		local x, y = core.mouse.get()
 		x, y = x - self.uis[2].x - self.display_x, y - self.uis[2].y - self.display_y
 		x, y = math.floor(x / 4), math.floor(y / 4)
@@ -103,25 +103,31 @@ function _M:unload()
 			local t
 			if dollrace then
 				local tileset, addon = self:getInfos(self.list[id])
-				sets[tileset] = sets[tileset] or {}
-				sets[tileset][addon] = sets[tileset][addon] or {}
-				t = sets[tileset][addon]
+				if tileset then
+					sets[tileset] = sets[tileset] or {}
+					sets[tileset][addon] = sets[tileset][addon] or {}
+					t = sets[tileset][addon]
 
-				t[#t+1] = ('dolls.%s = dolls.%s or {}\n'):format(dollrace, dollrace)
-				t[#t+1] = ('dolls.%s.%s = { base=%d,\n'):format(dollrace, sex, base)
+					t[#t+1] = ('dolls.%s = dolls.%s or {}\n'):format(dollrace, dollrace)
+					t[#t+1] = ('dolls.%s.%s = { base=%d,\n'):format(dollrace, sex, base)
+				end
 			else
 				local tileset, addon = self:getInfos(id)
-				sets[tileset] = sets[tileset] or {}
-				sets[tileset][addon] = sets[tileset][addon] or {}
-				t = sets[tileset][addon]
+				if tileset then
+					sets[tileset] = sets[tileset] or {}
+					sets[tileset][addon] = sets[tileset][addon] or {}
+					t = sets[tileset][addon]
 
-				t[#t+1] = ('tiles[%q] = { base=%d,\n'):format(id, base)
+					t[#t+1] = ('tiles[%q] = { base=%d,\n'):format(id, base)
+				end
 			end
 
-			for kind, d in pairs(data) do if kind ~= "base" and d.x then
-				t[#t+1] = ('\t%s = {x=%d, y=%d},\n'):format(kind, d.x * base, d.y * base)
-			end end
-			t[#t+1] = '}\n'
+			if t then
+				for kind, d in pairs(data) do if kind ~= "base" and d.x then
+					t[#t+1] = ('\t%s = {x=%d, y=%d},\n'):format(kind, d.x * base, d.y * base)
+				end end
+				t[#t+1] = '}\n'
+			end
 		end
 	end
 
@@ -210,6 +216,7 @@ function _M:getInfos(name)
 	if tilesetc then tileset = tilesetc end
 	local addon = "main"
 	local path = fs.getRealPath(Tiles.prefix..name)
+	if not path then return end
 	local _, _, pathc = path:find("dlcs/tome%-([^/]+)/")
 	if pathc then addon = pathc end
 	local _, _, pathc = path:find("addons/tome%-([^/]+)/")
@@ -228,6 +235,7 @@ function _M:use(item)
 	self.cur_item = item
 
 	local tileset, addon, name = self:getInfos(item.name)
+	if not tileset then return end
 
 	self.out.text = tileset..":"..addon.."@"..name
 	self.out:generate()
@@ -259,6 +267,10 @@ function _M:generateList()
 	list[#list+1] = {kind="dolls_race_human_female", name="player/human_female/base_cornac_01.png"}
 	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_human_male", name="player/human_male/base_cornac_01.png"}
+	list[list[#list].kind] = list[#list].name
+	list[#list+1] = {kind="dolls_race_ogre_female", name="player/ogre_female/base_01.png"}
+	list[list[#list].kind] = list[#list].name
+	list[#list+1] = {kind="dolls_race_ogre_male", name="player/ogre_male/base_01.png"}
 	list[list[#list].kind] = list[#list].name
 	list[#list+1] = {kind="dolls_race_orc_all", name="player/orc/base_01.png"}
 	list[list[#list].kind] = list[#list].name
